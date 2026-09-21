@@ -1,0 +1,136 @@
+{{define "run.html"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Rep.Name}} · 动态辨识工场</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>动态辨识工场</h1>
+  <nav>
+    <a href="/">首页</a>
+    <a href="/datasets/{{.Rep.DatasetID}}">← 数据集 #{{.Rep.DatasetID}}</a>
+    <a href="/compare?a={{.Rep.ID}}">与其他运行对比</a>
+    <a href="/runs/{{.Rep.ID}}/export">导出本运行 JSON</a>
+  </nav>
+</header>
+<main>
+  {{if .Flash.Msg}}<div class="flash {{.Flash.Kind}}">{{.Flash.Msg}}</div>{{end}}
+
+  <section class="card">
+    <h2>运行 #{{.Rep.ID}}：{{.Rep.Name}}</h2>
+    <p class="muted small">{{.Rep.Note}}</p>
+    <div style="margin:8px 0">
+      {{if .Rep.Published}}<span class="badge ok">已发布</span>
+      {{else if .Rep.PublishBlocked}}<span class="badge err">发布被阻断：{{.Rep.PublishBlocked}}</span>
+      {{else}}<span class="badge info">未发布</span>{{end}}
+      {{if .Rep.Resampled}}<span class="badge info">已显式重采样</span>{{end}}
+      {{if not .Rep.Regular}}<span class="badge warn">原始数据非等间隔</span>{{end}}
+    </div>
+    <dl class="kv">
+      <dt>估计段 / 验证段</dt><dd>[{{fmtFloat2 .Rep.Cfg.Est.Start}}, {{fmtFloat2 .Rep.Cfg.Est.End}}) /
+        [{{fmtFloat2 .Rep.Cfg.Val.Start}}, {{fmtFloat2 .Rep.Cfg.Val.End}}) 秒
+        {{if .Rep.Cfg.Est.Overlaps .Rep.Cfg.Val}}<span class="badge err">两段重叠，禁止发布</span>{{end}}</dd>
+      <dt>采样口径</dt><dd>原始间隔中位数 {{fmtFloat3 .Rep.NativeDt}}s；使用步长 {{fmtFloat3 .Rep.UsedDt}}s；
+        最大时钟抖动 {{fmtFloat3 .Rep.JitterMaxS}}s；{{if .Rep.Resampled}}已按显式选择重采样{{else}}未重采样{{end}}</dd>
+      <dt>预处理</dt><dd>通道处理：{{.Rep.Cfg.Detrend}}；缺失：{{.Rep.Cfg.Missing}}；
+        饱和样本 {{.Rep.SaturatedCount}} 个，其中 {{.Rep.SatExcludedFit}} 个按默认规则排除出拟合</dd>
+      <dt>样本</dt><dd>估计 {{.Rep.NEst}} 点，验证 {{.Rep.NVal}} 点；缺失 {{.Rep.MissingCount}} 点</dd>
+      <dt>发布策略</dt><dd class="small muted">估计段与验证段重叠时禁止发布；饱和段默认只显示/诊断，需显式勾选才进拟合；
+        候选排名以残差检验与验证误差为准，并列阶次同时给出复杂度与残差说明。</dd>
+    </dl>
+    <div style="margin-top:10px">
+      {{if .Rep.Published}}
+        <form method="post" action="/runs/{{.Rep.ID}}/publish?action=unpublish" style="display:inline">
+          <button type="submit" class="secondary">撤销发布</button>
+        </form>
+      {{else}}
+        <form method="post" action="/runs/{{.Rep.ID}}/publish?action=publish" style="display:inline"
+          onsubmit="return confirm('发布前再次确认：估计/验证不重叠，且最优候选通过残差检验？');">
+          <button type="submit">发布最优候选</button>
+        </form>
+      {{end}}
+      <a class="btn secondary" href="/compare?a={{.Rep.ID}}">选另一条运行对比</a>
+    </div>
+  </section>
+
+  {{if .Best}}
+  <section class="card">
+    <h2>最优候选（残差检验 + 验证误差 + 复杂度共同决定）</h2>
+    <dl class="kv">
+      <dt>模型</dt><dd>{{kindName .Best.Kind}}，阶次 {{.Best.Order}}，死区延迟 {{fmtFloat2 .Best.DelayS}} 秒
+        （= {{.Best.DelaySteps}} 个采样步）</dd>
+      <dt>稳态增益</dt><dd>{{if .Best.Params.Gain}}{{fmtFloat3 (.Best.Params.Gain)}}{{else}}—{{end}}</dd>
+      <dt>极点</dt><dd>
+        {{range .Best.Params.Poles}}|z|={{fmtFloat3 .Abs}} ({{fmtFloat3 .Re}}{{if lt .Im 0.0}}{{fmtFloat3 .Im}}{{else}}+{{fmtFloat3 .Im}}{{end}}i)；{{end}}
+      </dd>
+      <dt>时间常数（秒）</dt><dd>{{fmtSprintf "%v" .Best.Params.TimeConstS}}</dd>
+      <dt>验证指标</dt><dd>一步预测 NRMS {{fmtFloat3 .Best.Metrics.OneStepNRMS}}（拟合度 {{fmtFloat2 .Best.Metrics.OneStepFitPct}}%），
+        自由仿真 NRMS {{fmtFloat3 .Best.Metrics.SimNRMS}}（拟合度 {{fmtFloat2 .Best.Metrics.SimFitPct}}%）</dd>
+      <dt>残差检验</dt><dd>估计段白噪声：{{if .Best.Metrics.EstWhiteness}}<span class="badge ok">通过</span>{{else}}<span class="badge err">未通过</span>{{end}}
+        验证段白噪声：{{if .Best.Metrics.ValWhiteness}}<span class="badge ok">通过</span>{{else}}<span class="badge err">未通过</span>{{end}}
+        Ljung-Box p={{fmtFloat3 .Best.DiagVal.QPValue}}；ACF 越界 {{.Best.Metrics.ACFOutside}}，CCF 越界 {{.Best.Metrics.CCFOutside}}</dd>
+      <dd class="small muted">{{.Best.Params.Detail}}</dd>
+    </dl>
+    <p class="muted small">注意：若更高阶候选的训练误差更小但残差不再白（自相关 / 交叉相关越界），本工场不会选它；
+      阶次的提升必须同时改善残差检验，才被认为有结构依据。</p>
+  </section>
+
+  <section class="card">
+    <h2>拟合 / 一步预测 / 自由仿真</h2>
+    {{.TrainSVG}}
+    <div class="grid2">
+      <div>{{.OneStepSVG}}</div>
+      <div>{{.SimSVG}}</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>残差诊断（残差而非训练误差才是判据）</h2>
+    <div class="grid2">
+      <div>{{.ACFEstSVG}}{{.CCFEstSVG}}</div>
+      <div>{{.ACFValSVG}}{{.CCFValSVG}}</div>
+    </div>
+    <p class="small muted">红色柱＝超出 ±1.96/√N 95% 置信带。ACF 显著说明残差仍含可建模动态（阶次/延迟可能不对）；
+      CCF 在正滞后显著说明输入还能预测残差，通常指向延迟或输入阶数偏差。</p>
+  </section>
+  {{else}}
+  <section class="card"><div class="callout err">没有产生合格候选，请检查各候选的拒绝原因。</div></section>
+  {{end}}
+
+  <section class="card">
+    <h2>全部候选并列对比</h2>
+    <table>
+      <thead><tr>
+        <th>#</th><th>模型</th><th>延迟(秒/步)</th><th>阶次</th><th>参数数</th>
+        <th>训练NRMS*</th><th>验证一步NRMS</th><th>验证仿真NRMS</th>
+        <th>估计残差白</th><th>验证残差白</th><th>ACF/CCF越界</th><th>稳定</th><th>说明 / 拒绝</th>
+      </tr></thead>
+      <tbody>
+      {{range .Rep.Candidates}}
+        <tr class="{{if .Ranked}}best{{else if .RejectReason}}rejected{{end}}">
+          <td>{{.ID}}{{if .Ranked}} ★{{end}}</td>
+          <td>{{kindName .Kind}}</td>
+          <td>{{fmtFloat2 .DelayS}} / {{.DelaySteps}}</td>
+          <td>{{.Order}}</td>
+          <td>{{complexityOf .}}</td>
+          <td class="muted">{{fmtFloat3 .Metrics.TrainNRMS}}</td>
+          <td>{{fmtFloat3 .Metrics.OneStepNRMS}}</td>
+          <td>{{fmtFloat3 .Metrics.SimNRMS}}</td>
+          <td>{{yn .Metrics.EstWhiteness}}</td>
+          <td>{{if .Metrics.ValWhiteness}}<span class="badge ok">是</span>{{else}}<span class="badge err">否</span>{{end}}</td>
+          <td>{{.Metrics.ACFOutside}} / {{.Metrics.CCFOutside}}</td>
+          <td>{{stableOf .}}</td>
+          <td class="small">{{if .RejectReason}}<span class="badge err">{{.RejectReason}}</span>{{else}}{{.Params.Detail}}{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    <p class="small muted">* 训练 NRMS 仅展示，不参与第一名判定；判定顺序为：验证残差白噪声 → CCF/ACF 越界 →
+      验证自由仿真 / 一步预测 NRMS → 参数更少者优先。</p>
+  </section>
+</main>
+</body>
+</html>{{end}}

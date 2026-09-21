@@ -1,0 +1,90 @@
+{{define "home.html"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>动态辨识工场</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>动态辨识工场</h1>
+  <nav>
+    <a href="/">首页</a>
+    <a href="#datasets">数据集</a>
+    <a href="#runs">运行记录</a>
+    <a href="#io">导入 / 导出</a>
+  </nav>
+</header>
+<main>
+  {{if .Flash.Msg}}
+  <div class="flash {{.Flash.Kind}}">{{.Flash.Msg}}</div>
+  {{end}}
+
+  <section class="card" id="datasets">
+    <h2>数据集</h2>
+    <p class="muted">控制团队用阶跃、伪随机二值序列（PRBS）与扫频式激励驱动被控对象，记录输出、可选状态与饱和标志。
+    延迟一律按采样时间（秒）表达；不等间隔数据在未显式重采样时，不会被当作离散等步模型处理。</p>
+    <form method="post" action="/datasets/load-fixture" style="margin:8px 0">
+      <button type="submit">载入固定 fixture（PRBS + 单脉冲 + 阶跃，含时钟抖动 / 饱和 / 缺失）</button>
+    </form>
+    <table>
+      <thead><tr><th>ID</th><th>名称</th><th>说明</th><th>创建时间</th><th></th></tr></thead>
+      <tbody>
+      {{range .Datasets}}
+        <tr>
+          <td>{{.ID}}</td><td>{{.Name}}</td><td class="small muted">{{.Note}}</td>
+          <td class="small">{{.CreatedAt}}</td>
+          <td><a class="btn secondary" href="/datasets/{{.ID}}">打开</a></td>
+        </tr>
+      {{else}}
+        <tr><td colspan="5" class="muted">还没有数据集，请先载入固定 fixture。</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" id="runs">
+    <h2>运行记录</h2>
+    <table>
+      <thead><tr><th>ID</th><th>数据集</th><th>名称</th><th>创建时间</th><th>状态</th><th></th></tr></thead>
+      <tbody>
+      {{range .Runs}}
+        <tr>
+          <td>{{.ID}}</td><td>{{.DatasetID}}</td><td>{{.Name}}</td>
+          <td class="small">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+          <td>
+            {{if .Published}}<span class="badge ok">已发布</span>
+            {{else if .PublishBlocked}}<span class="badge err">发布阻断</span>
+            {{else}}<span class="badge info">未发布</span>{{end}}
+          </td>
+          <td><a class="btn secondary" href="/runs/{{.ID}}">查看</a></td>
+        </tr>
+      {{else}}
+        <tr><td colspan="6" class="muted">暂无运行记录。</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    <p class="small"><a href="/compare">前往运行对比 →</a></p>
+  </section>
+
+  <section class="card" id="io">
+    <h2>导入 / 导出 / 清空</h2>
+    <p><a class="btn" href="/export">导出全部（数据集 + 运行，JSON）</a></p>
+    <form method="post" action="/import" enctype="multipart/form-data" class="small">
+      <h3>重新导入复核（会先清空数据库）</h3>
+      <input type="file" name="bundle" accept="application/json" required>
+      <label><input type="checkbox" name="confirm_clear" value="1">我确认导入前先清空现有数据库</label>
+      <p><button type="submit">清空并导入</button></p>
+      <p class="muted">导入按原始报告原样恢复，不重新计算；需要复算时在数据集页重新发起一次辨识运行。</p>
+    </form>
+    <form method="post" action="/reset" class="small"
+          onsubmit="return confirm('确定清空所有数据集和运行记录？');">
+      <h3>仅清空数据库</h3>
+      <label><input type="checkbox" name="confirm_clear" value="1">我确认清空</label>
+      <p><button type="submit" class="danger">清空数据库</button></p>
+    </form>
+  </section>
+</main>
+</body>
+</html>{{end}}

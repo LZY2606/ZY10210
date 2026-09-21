@@ -1,0 +1,91 @@
+{{define "dataset.html"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.D.Name}} · 动态辨识工场</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>动态辨识工场</h1>
+  <nav><a href="/">← 首页</a><a href="/compare">运行对比</a></nav>
+</header>
+<main>
+  {{if .Flash.Msg}}<div class="flash {{.Flash.Kind}}">{{.Flash.Msg}}</div>{{end}}
+
+  <section class="card">
+    <h2>数据集 #{{.D.ID}}：{{.D.Name}}</h2>
+    <p class="muted">{{.D.Note}}</p>
+    <p class="small muted">样本数 {{len .D.Samples}}；建议估计窗口内采样间隔中位数 {{fmtFloat2 .MedDt}} 秒，
+      最大相对时钟抖动 {{fmtFloat2 .Jitter}}。蓝色底＝建议估计段，橙色底＝建议验证段；橙色竖条＝饱和样本。</p>
+    {{.InputSVG}}
+    {{.OutputSVG}}
+    <p class="small muted">输出图中的缺口即缺失样本；饱和段默认只参与显示和诊断，不进入拟合，需要明确勾选才纳入。</p>
+  </section>
+
+  <section class="card">
+    <h2>新建辨识运行</h2>
+    <form method="post" action="/datasets/{{.D.ID}}/runs">
+      <div class="grid2">
+        <div>
+          <label class="fld"><span>运行名称</span><input type="text" name="name" value="辨识运行" required></label>
+          <label class="fld"><span>估计段开始 t₀ (秒)</span><input type="number" step="any" name="est_start" value="{{fmtFloat2 .Est.Start}}"></label>
+          <label class="fld"><span>估计段结束 t₁ (秒)</span><input type="number" step="any" name="est_end" value="{{fmtFloat2 .Est.End}}"></label>
+          <label class="fld"><span>验证段开始 t₀ (秒)</span><input type="number" step="any" name="val_start" value="{{fmtFloat2 .Val.Start}}"></label>
+          <label class="fld"><span>验证段结束 t₁ (秒)</span><input type="number" step="any" name="val_end" value="{{fmtFloat2 .Val.End}}"></label>
+        </div>
+        <div>
+          <label class="fld"><span>延迟候选（秒，逗号分隔）</span><input type="text" name="delays" value="0, 1, 2, 3, 4, 5" style="width:230px"></label>
+          <label class="fld"><span>阶次候选（逗号分隔）</span><input type="text" name="orders" value="1, 2, 3" style="width:230px"></label>
+          <label class="fld"><span>去均值 / 去趋势</span>
+            <select name="detrend">
+              <option value="none">不处理</option>
+              <option value="mean" selected>去均值</option>
+              <option value="linear">去线性趋势</option>
+            </select>
+          </label>
+          <label class="fld"><span>缺失处理</span>
+            <select name="missing">
+              <option value="exclude" selected>排除（掩码）</option>
+              <option value="interpolate">线性插值</option>
+              <option value="zero">置零（显式选择）</option>
+            </select>
+          </label>
+          <label class="fld"><span>重采样步长 dt (秒，0=中位数)</span><input type="number" step="any" name="dt" value="0"></label>
+        </div>
+      </div>
+      <div class="pillrow">
+        <label><input type="checkbox" name="resample" value="1">非等间隔时显式重采样到等步网格（不勾选时遇抖动数据将拒绝假装成等步模型）</label>
+      </div>
+      <div class="pillrow">
+        <label><input type="checkbox" name="include_sat" value="1">饱和段参与拟合（默认关闭：仅显示与诊断）</label>
+      </div>
+      <label class="fld"><span>备注</span><input type="text" name="note" style="width:420px"></label>
+      <p><button type="submit">运行辨识并比较全部候选</button></p>
+      <p class="muted small">排名依据是验证段残差检验（Ljung-Box 白噪声、ACF、CCF）与验证误差，并以模型复杂度兜底；不以训练误差单点判断。</p>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>本数据集的运行</h2>
+    <table>
+      <thead><tr><th>ID</th><th>名称</th><th>dt/延迟/阶次</th><th>创建时间</th><th>状态</th><th></th></tr></thead>
+      <tbody>
+      {{range .Runs}}
+        <tr>
+          <td>{{.ID}}</td><td>{{.Name}}</td>
+          <td class="small">{{fmtFloat2 .UsedDt}}s · 延迟{{.Cfg.Delays}}s · 阶次{{.Cfg.Orders}}</td>
+          <td class="small">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+          <td>{{if .Published}}<span class="badge ok">已发布</span>{{else if .PublishBlocked}}<span class="badge err">阻断</span>{{else}}<span class="badge info">未发布</span>{{end}}</td>
+          <td><a class="btn secondary" href="/runs/{{.ID}}">查看</a></td>
+        </tr>
+      {{else}}
+        <tr><td colspan="6" class="muted">暂无运行。</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>{{end}}

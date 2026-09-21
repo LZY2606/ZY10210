@@ -1,0 +1,66 @@
+{{define "compare.html"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>运行对比 · 动态辨识工场</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>动态辨识工场</h1>
+  <nav><a href="/">首页</a><a href="#pick">运行对比</a></nav>
+</header>
+<main>
+  <section class="card" id="pick">
+    <h2>选择两条运行，定位参数与样本差异</h2>
+    <form method="get" action="/compare">
+      <label class="fld"><span>运行 A</span>
+        <select name="a">
+          {{range .All}}<option value="{{.ID}}" {{if eq .ID $.AID}}selected{{end}}>#{{.ID}} {{.Name}}（数据集 {{.DatasetID}}）</option>{{end}}
+        </select>
+      </label>
+      <label class="fld"><span>运行 B</span>
+        <select name="b">
+          {{range .All}}<option value="{{.ID}}" {{if eq .ID $.BID}}selected{{end}}>#{{.ID}} {{.Name}}（数据集 {{.DatasetID}}）</option>{{end}}
+        </select>
+      </label>
+      <p><button type="submit">对比</button></p>
+    </form>
+  </section>
+
+  {{if .Cmp}}
+  <section class="card">
+    <h2>配置差异</h2>
+    {{template "cmprows" .Cmp.ConfigRows}}
+  </section>
+  <section class="card">
+    <h2>数据口径与样本差异</h2>
+    {{template "cmprows" .Cmp.SampleRows}}
+    {{if .Cmp.OverlapAcross}}<div class="callout">两条运行在同一数据集上的估计窗口存在重叠——跨运行复用这些样本比较结论时需谨慎。</div>{{end}}
+  </section>
+  <section class="card">
+    <h2>最优候选参数与残差差异</h2>
+    {{if .Cmp.BestRows}}{{template "cmprows" .Cmp.BestRows}}
+      <div class="callout ok">{{.Cmp.Recommendation}}</div>
+    {{else}}<div class="callout err">至少一条运行没有合格候选，无法比较参数。</div>{{end}}
+  </section>
+  {{else if .AID}}
+  <div class="callout err">需要两条不同的运行记录才能对比。</div>
+  {{end}}
+</main>
+</body>
+</html>{{end}}
+
+{{define "cmprows"}}
+<table>
+  <thead><tr><th style="width:220px">项目</th><th>A</th><th>B</th></tr></thead>
+  <tbody>
+  {{range .}}
+    <tr {{if .Different}}class="best"{{end}}>
+      <td>{{.Label}}</td><td>{{.A}}</td><td>{{.B}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
