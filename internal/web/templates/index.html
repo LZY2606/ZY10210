@@ -1,0 +1,47 @@
+{{template "head" .}}
+<div class="card">
+  <h2>数据集</h2>
+  <p class="muted">本地系统辨识工场：阶跃 / PRBS / 扫频激励 → 预处理 → 多候选模型（ARX、状态空间、受限一阶）→ 残差检验。延迟以采样时间（秒）表达。</p>
+  <form method="post" action="/api/import-fixture" style="margin:10px 0">
+    <button type="submit">导入固定 fixture（含抖动/饱和/缺失）</button>
+  </form>
+  {{if not .Datasets}}
+    <div class="notice">数据库为空。先导入固定 fixture，或用下方表单从 CSV 新建数据集。清空数据库后可重新导入导出文件复核。</div>
+  {{end}}
+  <table>
+    <tr><th class="l">名称</th><th>样本数</th><th>名义 Ts(s)</th><th>类型</th><th>创建时间</th><th></th></tr>
+    {{range .Datasets}}
+    <tr>
+      <td class="l"><a href="/datasets/{{.ID}}">{{.Name}}</a></td>
+      <td>{{.N}}</td><td>{{.TsNominal}}</td>
+      <td>{{if .Fixture}}固定 fixture{{else}}导入{{end}}</td>
+      <td>{{.CreatedAt}}</td>
+      <td><a class="btn ghost" href="/api/export-dataset?id={{.ID}}">导出</a></td>
+    </tr>
+    {{end}}
+  </table>
+</div>
+
+<div class="card">
+  <h2>从 CSV 新建数据集</h2>
+  <form method="post" action="/datasets">
+    <div class="row">
+      <input name="name" placeholder="数据集名称" class="wide" style="width:240px">
+      <input name="ts" placeholder="名义采样周期 s，如 0.1">
+    </div>
+    <p class="muted" style="margin:8px 0">CSV 列：<code>t,u,y,sat</code>，t 为秒；u/y 留空或 <code>NA</code> 表示缺失；sat 为 0/1。允许首行表头。非等间隔时间戳请在运行时勾选“重采样”。</p>
+    <input name="description" placeholder="描述（可选）" class="wide">
+    <textarea name="csv" placeholder="t,u,y,sat&#10;0.0,0.1,0.0,0&#10;0.1,..." style="margin-top:8px"></textarea>
+    <div style="margin-top:8px"><button type="submit">创建并导入</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>导入运行导出（清空后复核）</h2>
+  <form method="post" action="/api/import-run" enctype="multipart/form-data" class="row">
+    <input type="file" name="file" accept="application/json" style="width:auto">
+    <button type="submit">上传运行导出 JSON 并重算</button>
+  </form>
+  <p class="muted">导入会恢复数据集，按相同分段/预处理/候选重新辨识，结果可与导出文件逐项对照。</p>
+</div>
+{{template "foot" .}}

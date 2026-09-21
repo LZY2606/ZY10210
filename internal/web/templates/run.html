@@ -1,0 +1,101 @@
+{{template "head" .}}
+{{if .IsError}}
+  <div class="card">
+    <h2>{{.Rec.Name}} #{{.Rec.ID}}</h2>
+    <div class="banner">运行未能产生候选，请返回检查区间、预处理或非等间隔重采样选项。</div>
+    <a class="btn ghost" href="/datasets/{{.DS.ID}}">返回数据集</a>
+  </div>
+{{else}}
+<div class="card">
+  <div class="row">
+    <h2 style="flex:1">{{.Rec.Name}} #{{.Rec.ID}}
+      <span class="tag {{.Rec.Status}}">{{.Rec.Status}}</span>
+      {{if .Rec.Published}}<span class="tag published">已发布</span>{{end}}
+    </h2>
+    <a class="btn ghost" href="/api/export-run?id={{.Rec.ID}}">导出运行</a>
+    <a class="btn ghost" href="/datasets/{{.DS.ID}}">返回数据集</a>
+  </div>
+  <p class="muted">数据集：{{.DS.Name}} · 有效采样周期 {{f4 .Res.Series.Ts}} s
+     · 估计段 [{{f2 .Res.Segments.EstStart}}, {{f2 .Res.Segments.EstEnd}})
+     · 验证段 [{{f2 .Res.Segments.ValStart}}, {{f2 .Res.Segments.ValEnd}})</p>
+  {{if .BlockedFlash}}<div class="banner">⛔ 发布被阻断：估计段与验证段存在重叠。结果仅保留为草稿诊断。</div>{{end}}
+  {{if eq .Rec.Status "blocked"}}<div class="banner">⛔ {{.Rec.BlockedReason}}。可以查看图表与残差诊断，但禁止发布。</div>{{end}}
+  {{range .Res.Messages}}<div class="notice">ℹ️ {{.}}</div>{{end}}
+  <p class="muted">饱和样本 {{.Res.Prep.SatCount}} 个；其中进入拟合 {{.Res.Prep.SatUsedFit}} 个；缺失修复 {{.Res.Prep.MissingFixed}} 处，仍缺失 {{.Res.Prep.MissingLeft}} 处。
+     去均值/去趋势的统计量只取自所选基准区间（默认估计段），不偷看验证数据。</p>
+</div>
+
+<div class="card">
+  <h2>候选比较（按 BIC 升序；阶次并列时请结合残差检验，而非只看训练拟合）</h2>
+  <table>
+    <tr>
+      <th class="l">候选</th><th>延迟(s)/拍</th><th>参数数</th>
+      <th>估计拟合%</th><th>验证一步%</th><th>验证仿真%</th>
+      <th>估计RMSE</th><th>AIC</th><th>BIC</th>
+      <th>ACF 越界</th><th>CCF 越界</th><th>延迟提示</th><th></th>
+    </tr>
+    {{range $i,$c := .Res.Candidates}}
+    <tr {{if eq $i $.CandIdx}}style="background:#eef5fc"{{end}}>
+      <td class="l">{{if $c.Error}}<span class="tag error">失败</span>{{end}}
+        {{$c.Spec.Kind}} n={{$c.Spec.Order}}
+      </td>
+      <td>{{f2 $c.Spec.Delay}} / {{$c.Dsteps}}</td>
+      <td>{{$c.Np}}</td>
+      <td>{{if $c.Error}}—{{else}}{{f2 $c.EstFit}}{{end}}</td>
+      <td>{{if $c.Error}}—{{else}}{{f2 $c.ValFit}}{{end}}</td>
+      <td>{{if $c.Error}}—{{else}}{{f2 $c.SimFit}}{{end}}</td>
+      <td>{{if $c.Error}}—{{else}}{{f3 $c.EstRMSE}}{{end}}</td>
+      <td>{{if $c.Error}}—{{else}}{{f2 $c.AIC}}{{end}}</td>
+      <td>{{if $c.Error}}—{{else}}{{f2 $c.BIC}}{{end}}</td>
+      <td>{{if $c.Error}}—{{else}}{{$c.Corr.ACFInside}}/{{$c.Corr.ACFTotal}}{{end}}</td>
+      <td>{{if $c.Error}}—{{else}}{{$c.Corr.CCFInside}}/{{$c.Corr.CCFTotal}}{{end}}</td>
+      <td class="l">{{if $c.Error}}{{$c.Error}}{{else}}{{$c.Corr.DelayHint}}{{end}}</td>
+      <td>{{if not $c.Error}}<a class="btn ghost" href="/runs/{{$.Rec.ID}}?cand={{$i}}">查看</a>{{end}}</td>
+    </tr>
+    {{end}}
+  </table>
+  <p class="muted">选择依据：训练拟合高不代表模型好；应优先看验证一步预测、自由仿真，以及 ACF（残差白度）与 CCF（外生性、延迟）。低阶模型若检验通过应优先于高阶。</p>
+</div>
+
+{{with .Cand}}
+<div class="card">
+  <h2>候选详情：{{.Spec.Kind}} n={{.Spec.Order}}，延迟 {{f2 .Spec.Delay}} s = {{.Dsteps}} 拍</h2>
+  <div class="grid2">
+    <div>
+      <h3>残差白度（ACF）</h3>
+      <p class="muted">{{.Corr.Whiteness}}</p>
+      {{$.ChartACF}}
+    </div>
+    <div>
+      <h3>输入-残差交叉相关（CCF）</h3>
+      <p class="muted">{{.Corr.Exogeneity}}；{{.Corr.DelayHint}}</p>
+      {{$.ChartCCF}}
+    </div>
+  </div>
+  {{$.ChartFit}}
+  {{$.ChartSim}}
+</div>
+
+<div class="card">
+  <h2>参数定位（运行间可对照）</h2>
+  <table>
+    <tr><th class="l">参数</th>{{range .ParamNames}}<th>{{.}}</th>{{end}}</tr>
+    <tr><td class="l">数值</td>{{range .Params}}<td>{{f4 .}}</td>{{end}}</tr>
+  </table>
+</div>
+{{end}}
+
+<div class="card">
+  <h2>发布</h2>
+  {{if eq .Rec.Status "blocked"}}
+    <div class="banner">区间重叠，发布按钮被服务端强制拒绝。</div>
+    <button disabled style="opacity:.5">禁止发布</button>
+  {{else if .Rec.Published}}
+    <div class="okbox">该运行已发布。</div>
+    <form method="post" action="/runs/{{.Rec.ID}}/unpublish"><button class="ghost">撤回发布</button></form>
+  {{else}}
+    <form method="post" action="/runs/{{.Rec.ID}}/publish"><button type="submit">发布此运行</button></form>
+  {{end}}
+</div>
+{{end}}
+{{template "foot" .}}

@@ -1,0 +1,118 @@
+{{template "head" .}}
+<div class="card">
+  <div class="row">
+    <h2 style="flex:1">{{.DS.Name}}</h2>
+    <a class="btn ghost" href="/api/export-dataset?id={{.DS.ID}}">导出数据集</a>
+    <a class="btn" href="/">返回</a>
+  </div>
+  <p class="muted">{{.DS.Description}} · 样本数 {{.N}} · 名义采样周期 {{.DS.TsNominal}} s</p>
+  {{.Chart}}
+</div>
+
+<div class="card">
+  <h2>新建辨识运行</h2>
+  <form method="post" action="/datasets/{{.DS.ID}}/runs">
+    <div class="row" style="margin-bottom:8px">
+      <input name="name" value="运行" placeholder="运行名称" style="width:200px">
+    </div>
+    <div class="grid2">
+      <div>
+        <h3>估计段（秒，左闭右开）</h3>
+        <div class="row">
+          <input name="est_start" value="6" step="any"> 至 <input name="est_end" value="20" step="any">
+        </div>
+        <h3>验证段（秒）</h3>
+        <div class="row">
+          <input name="val_start" value="30" step="any"> 至 <input name="val_end" value="48" step="any">
+        </div>
+        <p class="muted">验收演示：可把估计段改成 <code>25</code>–<code>35</code> 与验证段重叠以触发发布阻断。</p>
+      </div>
+      <div>
+        <h3>预处理版本</h3>
+        <div class="row">
+          去均值
+          <select name="demean">
+            <option value="none">不去均值</option>
+            <option value="est" selected>按估计段</option>
+            <option value="all">按全部数据</option>
+          </select>
+          去趋势
+          <select name="detrend">
+            <option value="none" selected>不去趋势</option>
+            <option value="est">按估计段线性</option>
+            <option value="all">按全部数据线性</option>
+          </select>
+        </div>
+        <div class="row" style="margin-top:6px">
+          缺失处理
+          <select name="missing">
+            <option value="interp" selected>线性插值</option>
+            <option value="ffill">前向填充</option>
+            <option value="error">报错拒绝</option>
+          </select>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label><input type="checkbox" name="resample" value="1" checked style="width:auto"> 非等间隔时重采样为等步网格（不勾选则拒绝，不假装等步）</label>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" name="sat_fit" value="1" style="width:auto"> 饱和样本参与拟合（默认仅显示/诊断）</label>
+        </div>
+      </div>
+    </div>
+
+    <h3>候选模型（阶次对 FO 忽略；延迟单位为秒，须为采样周期整数倍）</h3>
+    <div id="specs">
+      <div class="specrow">
+        <select name="kind"><option>ARX</option><option>SS</option><option>FO</option></select>
+        阶次 <input name="order" value="1" type="number" min="1">
+        延迟(s) <input name="delay" value="0.1" step="any">
+      </div>
+      <div class="specrow">
+        <select name="kind"><option>ARX</option><option>SS</option><option>FO</option></select>
+        阶次 <input name="order" value="2" type="number" min="1">
+        延迟(s) <input name="delay" value="0.2" step="any">
+      </div>
+      <div class="specrow">
+        <select name="kind"><option>FO</option><option>ARX</option><option>SS</option></select>
+        阶次 <input name="order" value="1" type="number" min="1">
+        延迟(s) <input name="delay" value="0.2" step="any">
+      </div>
+      <div class="specrow">
+        <select name="kind"><option>SS</option><option>ARX</option><option>FO</option></select>
+        阶次 <input name="order" value="2" type="number" min="1">
+        延迟(s) <input name="delay" value="0.2" step="any">
+      </div>
+    </div>
+    <button type="button" class="ghost" onclick="addSpec()">+ 增加候选</button>
+    <div style="margin-top:12px"><button type="submit">运行辨识</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>历史运行</h2>
+  {{if not .Runs}}<p class="muted">尚无运行。</p>{{end}}
+  <form action="/runs/0/compare" method="get">
+  <table>
+    <tr><th>对比</th><th class="l">名称</th><th>状态</th><th>阻断原因</th><th>创建时间</th></tr>
+    {{range .Runs}}
+    <tr>
+      <td><input type="checkbox" name="id" value="{{.ID}}" style="width:auto"></td>
+      <td class="l"><a href="/runs/{{.ID}}">{{.Name}} #{{.ID}}</a></td>
+      <td><span class="tag {{.Status}}">{{.Status}}</span>{{if .Published}} <span class="tag published">已发布</span>{{end}}</td>
+      <td class="l">{{.BlockedReason}}</td>
+      <td>{{.CreatedAt}}</td>
+    </tr>
+    {{end}}
+  </table>
+  <div style="margin-top:8px"><button type="submit" class="ghost">对比所选运行</button></div>
+  </form>
+</div>
+<script>
+function addSpec(){
+  const d=document.createElement('div');d.className='specrow';
+  d.innerHTML=`<select name="kind"><option>ARX</option><option>SS</option><option>FO</option></select>
+    阶次 <input name="order" value="2" type="number" min="1"> 延迟(s) <input name="delay" value="0.2" step="any">`;
+  document.getElementById('specs').appendChild(d);
+}
+</script>
+{{template "foot" .}}

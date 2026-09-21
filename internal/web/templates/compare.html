@@ -1,0 +1,45 @@
+{{template "head" .}}
+<div class="card">
+  <h2>运行间对比</h2>
+  <p class="muted">同一运行内候选已在运行页排序；此页用于跨运行定位参数与样本（预处理/分段）差异。</p>
+  <table>
+    <tr><th class="l">运行</th><th>数据集</th><th>估计段</th><th>验证段</th><th>Ts(s)</th><th>重采样</th><th>去均值</th><th>缺失</th><th>饱和入拟合</th><th>候选数</th></tr>
+    {{range .Items}}
+    <tr>
+      <td class="l"><a href="/runs/{{.Rec.ID}}">{{.Rec.Name}} #{{.Rec.ID}}</a></td>
+      <td class="l">{{.DS.Name}}</td>
+      <td>{{f2 .Res.Segments.EstStart}}–{{f2 .Res.Segments.EstEnd}}</td>
+      <td>{{f2 .Res.Segments.ValStart}}–{{f2 .Res.Segments.ValEnd}}</td>
+      <td>{{f4 .Res.Series.Ts}}</td>
+      <td>{{if .Res.Resampled}}是{{else}}否{{end}}</td>
+      <td>{{.Rec.Prep}}</td>
+      <td>{{len .Res.Candidates}}</td>
+    </tr>
+    {{end}}
+  </table>
+</div>
+
+<div class="card">
+  <h2>候选参数与残差检验对照</h2>
+  {{range .Items}}
+  <h3>{{.Rec.Name}} #{{.Rec.ID}} <span class="muted">({{.DS.Name}})</span></h3>
+  <table>
+    <tr><th class="l">候选</th><th>延迟拍</th><th>估计%</th><th>验证%</th><th>仿真%</th><th>BIC</th><th>ACF</th><th>CCF</th><th class="l">参数</th></tr>
+    {{range .Res.Candidates}}
+    <tr>
+      <td class="l">{{.Spec.Kind}} n={{.Spec.Order}}</td>
+      <td>{{.Dsteps}}</td>
+      <td>{{if .Error}}—{{else}}{{f2 .EstFit}}{{end}}</td>
+      <td>{{if .Error}}—{{else}}{{f2 .ValFit}}{{end}}</td>
+      <td>{{if .Error}}—{{else}}{{f2 .SimFit}}{{end}}</td>
+      <td>{{if .Error}}—{{else}}{{f2 .BIC}}{{end}}</td>
+      <td>{{if .Error}}—{{else}}{{.Corr.ACFInside}}/{{.Corr.ACFTotal}}{{end}}</td>
+      <td>{{if .Error}}—{{else}}{{.Corr.CCFInside}}/{{.Corr.CCFTotal}}{{end}}</td>
+      <td class="l">{{if .Error}}{{.Error}}{{else}}{{range $i,$p := .Params}}{{if $i}}, {{end}}{{f4 $p}}{{end}}{{end}}</td>
+    </tr>
+    {{end}}
+  </table>
+  {{end}}
+</div>
+<a class="btn ghost" href="/">返回</a>
+{{template "foot" .}}
